@@ -17,18 +17,71 @@ using namespace std;
 4: ホームラン
 */
 
-// 構造体の定義
-struct PlayerStats {
-    std::string name;
-    // 背番号
-    int num;
-    // 打率(AVG), 長打率(SLG), 打数(AB), 安打数(H), 盗塁数(SB), 出塁率(OBP)
-    double avg;
-    double slg;
-    int ab;
-    int h;
-    int sb;
-    double obp;
+#include <iostream>
+#include <string>
+#include <vector>
+#include <fstream>
+#include <sstream>
+#include <cmath>
+#include <cstdlib>
+#include <ctime>
+#include <random> 
+
+class PlayerStats {
+    private:
+        std::string name;
+        int num;
+        double avg;
+        double slg;
+        int ab;
+        int h;
+        int sb;
+        double obp;
+    public:
+        // デフォルトコンストラクタ
+        PlayerStats() : name(""), num(0), avg(0.0), slg(0.0), ab(0), h(0), sb(0), obp(0.0) {}
+
+    // データを設定するセッター関数
+    void setName(std::string newName) { name = newName; }
+    void setNum(int newNum) { num = newNum; }
+    void setAvg(double newAvg) { avg = newAvg; }
+    void setSlg(double newSlg) { slg = newSlg; }
+    void setAb(int newAb) { ab = newAb; }
+    void setH(int newH) { h = newH; }
+    void setSb(int newSb) { sb = newSb; }
+    void setObp(double newObp) { obp = newObp; }
+
+    // データを取得するゲッター関数
+    std::string getName() const { return name; }
+    int getNum() const { return num; }
+    double getAvg() const { return avg; }
+    double getSlg() const { return slg; }
+    int getAb() const { return ab; }
+    int getH() const { return h; }
+    int getSb() const { return sb; }
+    double getObp() const { return obp; }
+
+    // 打率を更新する関数
+    void updateAvg(int newHits, int newAtBats) {
+        addNewHits(newHits);
+        addNewAtBats(newAtBats);
+    }
+
+    void addNewHits(int newHits) {
+        h += newHits;
+        avg = static_cast<double>(h) / ab;
+    }
+
+    void addNewAtBats(int newAtBats) {
+        ab += newAtBats;
+        avg = static_cast<double>(h) / ab;
+    }
+
+    // その他の統計データを計算する関数
+    // 例えば、OPS (出塁率 + 長打率) を計算する関数
+    double calculateOps() const {
+        return obp + slg;
+    }
 };
 
 // 打席結果を文字列で返す関数
@@ -74,68 +127,74 @@ void pushRunner(std::string &fromBase, std::string &toBase, int &score) {
 
 // 打席結果に応じてベースを進める関数
 void hitResult(int hitType, std::vector<PlayerStats> &players, int &now_batter) {
-    if(hitType >= 5) return; // アウトの場合、何もしない
+    if(hitType >= 5) {
+        players[now_batter].addNewAtBats(1);
+        return; // アウトの場合、何もしない
+    }
+    else {
+        // 打数・安打数・打率を更新
+        players[now_batter].updateAvg(0, 1);
+        // ホームランの場合、全てのランナーがスコアする
+        if(hitType == 4) {
+            advanceBases(one_base, score, true);
+            advanceBases(two_base, score, true);
+            advanceBases(thr_base, score, true);
+            score++; // バッターもスコアする
+            base = 0; // ベースをクリア
+        } else {
+            // ベースを進める
+            if(hitType >= 0) pushRunner(two_base, thr_base, score);
+            if(hitType >= 2) pushRunner(one_base, two_base, score);
 
-    // ホームランの場合、全てのランナーがスコアする
-    else if(hitType == 4) {
-        advanceBases(one_base, score, true);
-        advanceBases(two_base, score, true);
-        advanceBases(thr_base, score, true);
-        score++; // バッターもスコアする
-        base = 0; // ベースをクリア
-    } else {
-        // ベースを進める
-        if(hitType >= 0) pushRunner(two_base, thr_base, score);
-        if(hitType >= 2) pushRunner(one_base, two_base, score);
-
-        // ヒットに応じてランナーを配置
-        switch(hitType) {
-            case 0: 
-                // 1から2にランナーを進める
-                pushRunner(one_base, two_base, score);
-                // 3塁ランナーをホームイン
-                advanceBases(thr_base, score, true);
-                one_base = players[now_batter].name; 
-                break;
-            case 1: 
-                // 1から2にランナーを進める
-                pushRunner(one_base, two_base, score);
-                // 3塁ランナーをホームイン
-                advanceBases(thr_base, score, true);
-                one_base = players[now_batter].name; 
-                break;
-            case 2: 
-                // 1から3にランナーを進める
-                pushRunner(one_base, thr_base, score);
-                // 2,3塁ランナーをホームイン
-                advanceBases(two_base, score, true);
-                advanceBases(thr_base, score, true);
-                two_base = players[now_batter].name; 
-                break;
-            case 3:
-                // 1,2,3からホームにランナーを進める
-                advanceBases(one_base, score, true);
-                advanceBases(two_base, score, true);
-                advanceBases(thr_base, score, true);
-                thr_base = players[now_batter].name; 
-                break;
+            // ヒットに応じてランナーを配置
+            switch(hitType) {
+                case 0: 
+                    // 1から2にランナーを進める
+                    pushRunner(one_base, two_base, score);
+                    // 3塁ランナーをホームイン
+                    advanceBases(thr_base, score, true);
+                    one_base = players[now_batter].getName(); 
+                    break;
+                case 1: 
+                    // 1から2にランナーを進める
+                    pushRunner(one_base, two_base, score);
+                    // 3塁ランナーをホームイン
+                    advanceBases(thr_base, score, true);
+                    one_base = players[now_batter].getName(); 
+                    break;
+                case 2: 
+                    // 1から3にランナーを進める
+                    pushRunner(one_base, thr_base, score);
+                    // 2,3塁ランナーをホームイン
+                    advanceBases(two_base, score, true);
+                    advanceBases(thr_base, score, true);
+                    two_base = players[now_batter].getName(); 
+                    break;
+                case 3:
+                    // 1,2,3からホームにランナーを進める
+                    advanceBases(one_base, score, true);
+                    advanceBases(two_base, score, true);
+                    advanceBases(thr_base, score, true);
+                    thr_base = players[now_batter].getName(); 
+                    break;
+            }
+            base++; // ベースを増やす
         }
-        base++; // ベースを増やす
     }
 }
 
 // 打席結果をランダムに生成する関数
 // Microsoft Copilot AIによって生成した部分です
-int generateAtBatResult(const PlayerStats& player) {
+int generateAtBatResult(PlayerStats &player) {
     // 乱数生成器の初期化
     std::random_device rd;
     std::mt19937 gen(rd());
     
     // 打率に基づくヒットの確率
-    std::bernoulli_distribution hitDist(player.avg);
+    std::bernoulli_distribution hitDist(player.getAvg());
     
     // 長打率に基づく長打の確率
-    double extraBaseHitProb = player.slg - player.avg;
+    double extraBaseHitProb = player.getSlg() - player.getAvg();
     std::bernoulli_distribution extraBaseHitDist(extraBaseHitProb);
     
     // 打席結果の生成
@@ -151,7 +210,7 @@ int generateAtBatResult(const PlayerStats& player) {
     } else {
         // ヒットが出なかった場合
         // ランダムな打席結果を生成
-        int result = rand() % 4 ; // 0:フライ, 1:ゴロ, 2:三振, 3:四球
+        int result = rand() % 4 ; // 0:フライ, 1:ゴロ, 2:三振
         switch(result) {
             case 0: return 5; // フライ
             case 1: return 6; // ゴロ
@@ -178,36 +237,38 @@ void getPlayerData(std::vector<PlayerStats> &players) {
         std::stringstream s(line);
         PlayerStats player;
 
+        std::string tmpword;
         // 名前
-        std::getline(s, player.name, ',');
+        std::getline(s, tmpword, ',');
+        player.setName(tmpword);
 
         // 背番号
         std::getline(s, word, ',');
-        player.num = std::stoi(word);
+        player.setNum(std::stoi(word));
 
         // 打率(AVG)
         std::getline(s, word, ',');
-        player.avg = std::stod(word);
+        player.setAvg(std::stod(word));
 
         // 長打率(SLG)
         std::getline(s, word, ',');
-        player.slg = std::stod(word);
+        player.setSlg(std::stod(word));
 
         // 打数(AB)
         std::getline(s, word, ',');
-        player.ab = std::stoi(word);
+        player.setAb(std::stod(word));
 
         // 安打数(H)
         std::getline(s, word, ',');
-        player.h = std::stoi(word);
+        player.setH(std::stod(word));
 
         // 盗塁数(SB)
         std::getline(s, word, ',');
-        player.sb = std::stoi(word);
+        player.setSb(std::stod(word));
 
         // 出塁率(OBP)
         std::getline(s, word);
-        player.obp = std::stod(word);
+        player.setObp(std::stod(word));
 
         // 構造体の配列に追加
         players.push_back(player);
@@ -216,21 +277,19 @@ void getPlayerData(std::vector<PlayerStats> &players) {
 
 void showAllPlayers(std::vector<PlayerStats> &players) {
     for (const auto &player : players) {
-        std::cout << "名前: " << player.name << std::endl;
-        std::cout << "背番号: " << player.num << std::endl;
-        std::cout << "打率: " << player.avg << std::endl;
-        std::cout << "長打率: " << player.slg << std::endl;
-        std::cout << "打数: " << player.ab << std::endl;
-        std::cout << "安打数: " << player.h << std::endl;
-        std::cout << "盗塁数: " << player.sb << std::endl;
-        std::cout << "出塁率: " << player.obp << std::endl;
+        std::cout << "背番号" << player.getNum() << " ";
+        std::cout << player.getName() << " ";
+        std::cout << player.getAvg() << " ";
+        std::cout << player.getH() << "/" << player.getAb() << " ";
+        std::cout << player.getSb() << "盗塁" << " ";
+        std::cout << "OPS: " << player.calculateOps() << std::endl;
         std::cout << std::endl;
     }
 }
 
 void showOrder(std::vector<PlayerStats> &players) {
     for (int i = 0; i < 9; i++) {
-        std::cout << "打順: " << i + 1 << " " << players[i].name << std::endl;
+        std::cout << "打順: " << i + 1 << " " << players[i].getName() << std::endl;
     }
 }
 
@@ -242,11 +301,11 @@ std::vector<PlayerStats> selectPlayersManually(std::vector<PlayerStats>& players
 
     while (count < 9) {
         std::cout << "選手の背番号を入力してください: ";
-        cin >> playerNum;
+        std::cin >> playerNum;
 
         // 選手を検索してリストに追加
         for (const auto& player : players) {
-            if (player.num == playerNum) {
+            if (player.getNum() == playerNum) {
                 selectedPlayers.push_back(player);
                 count++;
                 break;
@@ -256,6 +315,28 @@ std::vector<PlayerStats> selectPlayersManually(std::vector<PlayerStats>& players
     }
 
     return selectedPlayers;
+}
+
+void updateRoster(std::vector<PlayerStats>& players, std::vector<PlayerStats>& selectedPlayers) {
+    std::ofstream file("roster.csv"); // CSVファイルを開く
+    file << "名前, 背番号, 打率(AVG), 長打率(SLG), 打数(AB), 安打数(H), 盗塁数(SB), 出塁率(OBP)" << std::endl;
+    for (const auto& player : players) {
+        bool found = false;
+        for (const auto& selectedPlayer : selectedPlayers) {
+            if (player.getNum() == selectedPlayer.getNum()) {
+                file << selectedPlayer.getName() << ", " << selectedPlayer.getNum() << ", "
+                << selectedPlayer.getAvg() << ", " << selectedPlayer.getSlg() << ", " << selectedPlayer.getAb() << ", "
+                << selectedPlayer.getH() << ", " << selectedPlayer.getSb() << ", " << selectedPlayer.getObp() << std::endl;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            file << player.getName() << ", " << player.getNum() << ", " 
+            << player.getAvg() << ", " << player.getSlg() << ", " << player.getAb() << ", " 
+            << player.getH() << ", " << player.getSb() << ", " << player.getObp() << std::endl;
+        }
+    }
 }
 
 int main() {
@@ -282,12 +363,12 @@ int main() {
         int result = generateAtBatResult(selectedPlayers[now_batter]);
 
         // 打者が打席に立つ
-        cout << "打者：" << selectedPlayers[now_batter].name << endl;
+        std::cout << "打者：" << selectedPlayers[now_batter].getName() << std::endl;
 
-        cout << "サインを出す場合、サインを入力してください" << endl;
-        cout << "出さない場合はnを押してください" << endl;
+        std::cout << "サインを出す場合、サインを入力してください" << std::endl;
+        std::cout << "出さない場合はnを押してください" << std::endl;
         // サインを入力
-        cin >> sign;
+        std::cin >> sign;
 
         // サインに応じて打席結果を表示
         if(sign == "n") {
@@ -299,7 +380,7 @@ int main() {
             }
             // 打席内容を表示
             batresult = getAtBatResultString(result);
-            cout << "打者：" << selectedPlayers[now_batter].name << "の結果：" << batresult << endl;
+            cout << "打者：" << selectedPlayers[now_batter].getName() << "の結果：" << batresult << endl;
             cout << out_count << "アウト" << " ";
             cout << "現在の得点：" << score << endl;
             cout << endl;
@@ -314,4 +395,5 @@ int main() {
         cout << endl;
     }
     cout << "チェンジ！" << endl;
+    updateRoster(players, selectedPlayers);
 }
