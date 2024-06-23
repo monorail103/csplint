@@ -5,7 +5,7 @@
 #include <sstream>
 #include <cmath>
 #include <cstdlib> // std::rand, std::srand
-#include <ctime>   // std::time
+#include <chrono>
 #include <random> // Add this line to include the <random> header
 using namespace std;
 
@@ -17,15 +17,9 @@ using namespace std;
 4: ホームラン
 */
 
-#include <iostream>
-#include <string>
-#include <vector>
-#include <fstream>
-#include <sstream>
-#include <cmath>
-#include <cstdlib>
-#include <ctime>
-#include <random> 
+// 乱数生成器の初期化
+std::random_device rd;
+std::mt19937 gen(rd());
 
 class PlayerStats {
     private:
@@ -76,28 +70,101 @@ class PlayerStats {
         ab += newAtBats;
         avg = static_cast<double>(h) / ab;
     }
-
-    // その他の統計データを計算する関数
-    // 例えば、OPS (出塁率 + 長打率) を計算する関数
+    // OPS (出塁率 + 長打率) を計算する関数
     double calculateOps() const {
         return obp + slg;
     }
+
+    void showPlayers() {
+        std::cout << "背番号" << num << " ";
+        std::cout << name << " ";
+        std::cout << avg << " ";
+        std::cout << h << "/" << ab << " ";
+        std::cout << sb << "盗塁" << " ";
+        std::cout << "OPS: " << obp+slg << std::endl;
+        std::cout << std::endl;
+    }
 };
 
-// 打席結果を文字列で返す関数
-string getAtBatResultString(int result) {
-    switch (result) {
-        case 0: return "四球";
-        case 1: return "単打";
-        case 2: return "二塁打";
-        case 3: return "三塁打";
-        case 4: return "ホームラン";
-        case 5: return "フライ";
-        case 6: return "ゴロ";
-        case 7: return "三振";
-        default: return "不明な結果";
-    }
-}
+class PitcherStats {
+    private:
+        std::string name;
+        // 背番号
+        int num;
+        // 防御率
+        double era;
+        // 投球回
+        int ip;
+        // 被安打
+        int h;
+        // 与四球
+        int bb;
+        // 三振
+        int so;
+        // 最高球速
+        int max_speed;
+        // 疲労度
+        int fatigue;
+    
+    public:
+        // デフォルトコンストラクタ
+        PitcherStats() : name(""), num(0), era(0.0), ip(0), h(0), bb(0), so(0) {}
+
+        // データを設定するセッター関数
+        void setName(std::string newName) { name = newName; }
+        void setNum(int newNum) { num = newNum; }
+        void setEra(double newEra) { era = newEra; }
+        void setIp(int newIp) { ip = newIp; }
+        void setH(int newH) { h = newH; }
+        void setBb(int newBb) { bb = newBb; }
+        void setSo(int newSo) { so = newSo; }
+
+        // データを取得するゲッター関数
+        std::string getName() const { return name; }
+        int getNum() const { return num; }
+        double getEra() const { return era; }
+        int getIp() const { return ip; }
+        int getH() const { return h; }
+        int getBb() const { return bb; }
+        int getSo() const { return so; }
+
+        // 防御率を更新する関数
+        void updateEra(int newEarnedRuns, int newInningsPitched) {
+            addNewEarnedRuns(newEarnedRuns);
+            addNewInningsPitched(newInningsPitched);
+        }
+
+        void addNewEarnedRuns(int newEarnedRuns) {
+            era = static_cast<double>(newEarnedRuns) / ip * 9;
+        }
+
+        void addNewInningsPitched(int newInningsPitched) {
+            ip += newInningsPitched;
+            era = static_cast<double>(h) / ip * 9;
+        }
+
+        // K/BB比を計算する関数
+        double getkbb() {
+            double kbb = so / bb;
+            return kbb;
+        }
+
+        void showPlayers() {
+            std::cout << "背番号" << num << " ";
+            std::cout << name << " ";
+            std::cout << "防御率：" << era << " ";
+            std::cout << ip << "回 ";
+            std::cout << h << "被安打 ";
+            std::cout << bb << " ";
+            std::cout << so << " ";
+            std::cout << "K/BB: " << so / bb << std::endl;
+            std::cout << std::endl;
+        }
+
+        void updateFatigue() {
+            fatigue = 0;
+        }
+};
 
 // ベースとスコアの状態を管理する変数
 std::string one_base = "なし", two_base = "なし", thr_base = "なし";
@@ -126,103 +193,183 @@ void pushRunner(std::string &fromBase, std::string &toBase, int &score) {
 }
 
 // 打席結果に応じてベースを進める関数
-void hitResult(int hitType, std::vector<PlayerStats> &players, int &now_batter) {
-    if(hitType >= 5) {
+int hitResult(int hitType, std::vector<PlayerStats> &players, int &now_batter, int &score, int &ball, int &strike, int &out_count) {
+    // return 0のとき：
+    if(ball<3 && hitType == 8) {
+        // ボールの場合、ボールを進める
+        ball++;
+        return 0;
+    }
+    else if(strike<2 && hitType == 7 || hitType == 9) {
+        // ストライクの場合、アウトカウントを増やす
+        strike++;
+        return 0;
+    }
+    else if(hitType >= 5) {
         players[now_batter].addNewAtBats(1);
-        return; // アウトの場合、何もしない
+        out_count++;
+        return 1; // アウトの場合、何もしない
     }
     else {
         // 打数・安打数・打率を更新
         players[now_batter].updateAvg(0, 1);
         // ホームランの場合、全てのランナーがスコアする
-        if(hitType == 4) {
-            advanceBases(one_base, score, true);
-            advanceBases(two_base, score, true);
-            advanceBases(thr_base, score, true);
-            score++; // バッターもスコアする
-            base = 0; // ベースをクリア
-        } else {
-            // ベースを進める
-            if(hitType >= 0) pushRunner(two_base, thr_base, score);
-            if(hitType >= 2) pushRunner(one_base, two_base, score);
+        // ベースを進める
+        if(hitType >= 0) pushRunner(two_base, thr_base, score);
+        if(hitType >= 2) pushRunner(one_base, two_base, score);
 
-            // ヒットに応じてランナーを配置
-            switch(hitType) {
-                case 0: 
-                    // 1から2にランナーを進める
-                    pushRunner(one_base, two_base, score);
-                    // 3塁ランナーをホームイン
-                    advanceBases(thr_base, score, true);
-                    one_base = players[now_batter].getName(); 
-                    break;
-                case 1: 
-                    // 1から2にランナーを進める
-                    pushRunner(one_base, two_base, score);
-                    // 3塁ランナーをホームイン
-                    advanceBases(thr_base, score, true);
-                    one_base = players[now_batter].getName(); 
-                    break;
-                case 2: 
-                    // 1から3にランナーを進める
-                    pushRunner(one_base, thr_base, score);
-                    // 2,3塁ランナーをホームイン
-                    advanceBases(two_base, score, true);
-                    advanceBases(thr_base, score, true);
-                    two_base = players[now_batter].getName(); 
-                    break;
-                case 3:
-                    // 1,2,3からホームにランナーを進める
-                    advanceBases(one_base, score, true);
-                    advanceBases(two_base, score, true);
-                    advanceBases(thr_base, score, true);
-                    thr_base = players[now_batter].getName(); 
-                    break;
-            }
-            base++; // ベースを増やす
+        // ヒットに応じてランナーを配置
+        switch(hitType) {
+            // 四球の場合
+            case 8: 
+                // 2から3にランナーを進める
+                pushRunner(two_base, thr_base, score);
+                // 1から2にランナーを進める
+                pushRunner(one_base, two_base, score);
+                advanceBases(thr_base, score, true);
+                one_base = players[now_batter].getName(); 
+                break;
+            // 単打の場合
+            case 1: 
+                // 2から3にランナーを進める
+                pushRunner(two_base, thr_base, score);
+                // 1から2にランナーを進める
+                pushRunner(one_base, two_base, score);
+                advanceBases(thr_base, score, true);
+                one_base = players[now_batter].getName(); 
+                break;
+            // 二塁打の場合
+            case 2: 
+                // 1から3にランナーを進める
+                pushRunner(one_base, thr_base, score);
+                // 2,3塁ランナーをホームイン
+                advanceBases(two_base, score, true);
+                advanceBases(thr_base, score, true);
+                two_base = players[now_batter].getName(); 
+                break;
+            // 三塁打の場合
+            case 3:
+                // 1,2,3からホームにランナーを進める
+                advanceBases(one_base, score, true);
+                advanceBases(two_base, score, true);
+                advanceBases(thr_base, score, true);
+                thr_base = players[now_batter].getName(); 
+                break;
+            // ホームランの場合
+            case 4:
+                advanceBases(one_base, score, true);
+                advanceBases(two_base, score, true);
+                advanceBases(thr_base, score, true);
+                score++; // バッターもスコアする
+                base = 0; // ベースをクリア
+                break;
+            // ゴロの場合、ランナーを進める
+            case 6:
+                // 2から3にランナーを進める
+                pushRunner(two_base, thr_base, score);
+                // 3からホームにランナーを進める
+                advanceBases(thr_base, score, true);
+                // 1から2にランナーを進める
+                pushRunner(one_base, two_base, score);
+                break;
+                
         }
+    }
+    return 1;
+}
+
+// 打席結果を文字列で返す関数
+string getAtBatResultString(int result) {
+    switch (result) {
+        case 0: return "ボール";
+        case 1: return "単打";
+        case 2: return "二塁打";
+        case 3: return "三塁打";
+        case 4: return "ホームラン";
+        case 5: return "フライ";
+        case 6: return "ゴロ";
+        case 7: return "空振り";
+        case 8: return "ボール";
+        case 9: return "ファウル";
+        default: return "不明な結果";
     }
 }
 
+// 長打の種類を決定する関数
+int determineExtraBaseHit(const PlayerStats& player, std::mt19937& gen) {
+    std::uniform_int_distribution<> extraBaseHitType(2, 4);
+    return extraBaseHitType(gen); // 2:二塁打, 3:三塁打, 4:本塁打
+}
+
+// アウトの種類を決定する関数
+int determineOutType(std::mt19937& gen) {
+    std::uniform_int_distribution<> outType(5, 6);
+    return outType(gen); // 5:フライ, 6:ゴロ
+}
+
+
 // 打席結果をランダムに生成する関数
-// Microsoft Copilot AIによって生成した部分です
-int generateAtBatResult(PlayerStats &player) {
-    // 乱数生成器の初期化
-    std::random_device rd;
-    std::mt19937 gen(rd());
+int generateAtBatResult(PlayerStats& player, int ball, int strike, std::string sign) {
+    // 乱数シードの設定
+    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+    std::mt19937 gen(seed); // 乱数生成器
+
+    std::discrete_distribution<> atBatResultDist; // Declare the variable "atBatResultDist"
     
-    // 打率に基づくヒットの確率
-    std::bernoulli_distribution hitDist(player.getAvg());
+    // 打席結果の確率分布を設定
+    atBatResultDist = std::discrete_distribution<> ({
+        player.getAvg() - player.getObp(), // 単打
+        player.getSlg() - player.getAvg(), // 長打（二塁打、三塁打、本塁打）
+        1 - player.getObp(), // アウト（ゴロ、フライ、三振）
+        player.getObp() - player.getAvg(), // ボール
+        player.getObp() - player.getAvg(), // 空振り
+        player.getObp(), // ファウル
+    });
     
-    // 長打率に基づく長打の確率
-    double extraBaseHitProb = player.getSlg() - player.getAvg();
-    std::bernoulli_distribution extraBaseHitDist(extraBaseHitProb);
-    
-    // 打席結果の生成
-    if (hitDist(gen)) {
-        // ヒットが出た場合
-        if (extraBaseHitDist(gen)) {
-            // 長打の確率に基づいて二塁打、三塁打、本塁打を決定
-            std::uniform_int_distribution<> extraBaseHitType(2, 4);
-            return extraBaseHitType(gen); // 2:二塁打, 3:三塁打, 4:本塁打
-        } else {
-            return 1; // 単打
-        }
-    } else {
-        // ヒットが出なかった場合
-        // ランダムな打席結果を生成
-        int result = rand() % 4 ; // 0:フライ, 1:ゴロ, 2:三振
-        switch(result) {
-            case 0: return 5; // フライ
-            case 1: return 6; // ゴロ
-            case 2: return 7; // 三振
-            case 3: return 0; // 四球
-        }
+    // 「振りに行け」サインが出された場合の確率分布の調整
+    double hitIncreaseFactor = (sign=="h") ? 1.2 : 1.0; // ヒット確率を20%増加
+    double strikeOutIncreaseFactor = (sign=="h") ? 1.1 : 1.0; // 三振確率を10%増加
+
+    // 打席結果をランダムに生成
+    int atBatResult = atBatResultDist(gen);
+
+    // カウントに応じた追加のロジック
+    if (strike == 2) {
+        // ストライクが2の場合、三振の確率を増加
+        atBatResult = (atBatResult == 2) ? 6 : atBatResult;
+    } else if (ball == 3) {
+        // ボールが3の場合、四球の確率を増加
+        atBatResult = (atBatResult == 3) ? 7 : atBatResult;
     }
-    return 0;
+
+    // 打席結果に応じた処理
+    switch (atBatResult) {
+        case 0: // 単打
+            player.updateAvg(1, 1);
+            return 1;
+        case 1: // 長打
+            player.updateAvg(1, 1); // 打率を更新
+            // 長打の種類を決定する追加のロジック
+            return determineExtraBaseHit(player, gen);
+        case 2: // アウト
+            player.addNewAtBats(1);
+            return determineOutType(gen);
+        case 3: // ボール
+            return 8;
+        case 4: // ファウル
+            if (strike < 2) {
+                strike++;
+            }
+            return 9;
+        case 5: // 空振り
+            return 7;
+        default:
+            return 0; // 予期せぬ結果
+    }
 }
 
 // 選手一覧から選手データを取得し、すべてを表示する関数
-void getPlayerData(std::vector<PlayerStats> &players) {
+void getPlayerData(std::vector<PlayerStats> &players, std::string filename) {
     // 名前, 打率(AVG), 長打率(SLG), 打数(AB), 安打数(H), 盗塁数(SB), 出塁率(OBP)
 
     std::ifstream file("roster.csv"); // CSVファイルを開く
@@ -276,14 +423,8 @@ void getPlayerData(std::vector<PlayerStats> &players) {
 }
 
 void showAllPlayers(std::vector<PlayerStats> &players) {
-    for (const auto &player : players) {
-        std::cout << "背番号" << player.getNum() << " ";
-        std::cout << player.getName() << " ";
-        std::cout << player.getAvg() << " ";
-        std::cout << player.getH() << "/" << player.getAb() << " ";
-        std::cout << player.getSb() << "盗塁" << " ";
-        std::cout << "OPS: " << player.calculateOps() << std::endl;
-        std::cout << std::endl;
+    for (PlayerStats &player : players) {
+        player.showPlayers();
     }
 }
 
@@ -341,12 +482,14 @@ void updateRoster(std::vector<PlayerStats>& players, std::vector<PlayerStats>& s
 
 int main() {
     int out_count = 0;
+    int ball = 0, strike = 0;
 
     // 選手データを取得
     std::vector<PlayerStats> players;
-    getPlayerData(players);
+    getPlayerData(players, "roster.csv");
     showAllPlayers(players);
 
+    std::cout << "打順を選択してください。" << endl;
     // ユーザーが選手を手動で選択
     std::vector<PlayerStats> selectedPlayers = selectPlayersManually(players);
     // 選択された選手を表示
@@ -359,41 +502,48 @@ int main() {
         if(now_batter == 8) now_batter = 0;
         else now_batter++;
 
-        // 打席結果を生成
-        int result = generateAtBatResult(selectedPlayers[now_batter]);
-
         // 打者が打席に立つ
         std::cout << "打者：" << selectedPlayers[now_batter].getName() << std::endl;
 
-        std::cout << "サインを出す場合、サインを入力してください" << std::endl;
-        std::cout << "出さない場合はnを押してください" << std::endl;
-        // サインを入力
-        std::cin >> sign;
+        // カウントが溜まるまで打席を続行
+        while(true) {
+            // ストライクとボールを表示
+            std::cout << "B:";
+            for(int i = 0; i < ball; i++) std::cout << "●";
+            std::cout << "\nS:";
+            for(int i = 0; i < strike; i++) std::cout << "●";
+            std::cout << "\nO:";
+            for(int i = 0; i < out_count; i++) std::cout << "●";
+            std::cout << std::endl;
 
-        // サインに応じて打席結果を表示
-        if(sign == "n") {
-            if(result == 5 || result == 6 || result == 7) {
-                out_count++;
-            }
-            else {
-                hitResult(result, selectedPlayers, now_batter);
-            }
-            // 打席内容を表示
-            batresult = getAtBatResultString(result);
-            cout << "打者：" << selectedPlayers[now_batter].getName() << "の結果：" << batresult << endl;
-            cout << out_count << "アウト" << " ";
-            cout << "現在の得点：" << score << endl;
+            std::cout << "サインを出す場合、サインを入力してください" << std::endl;
+            std::cout << "出さない場合はnを押してください" << std::endl;
+            // サインを入力
+            std::cin >> sign;
             cout << endl;
-        } else {
-            cout << "打者に" << sign << "を要求します。" << endl;
+
+            if(strike == 2 && ball == 3) {
+                std::cout << "フルカウント！" << std::endl;
+            }
+            // 打席結果を文字に変換
+            int result = generateAtBatResult(selectedPlayers[now_batter], ball, strike, sign);
+            std::string resultString = getAtBatResultString(result);
+            std::cout << resultString << std::endl;
+            if(hitResult(result, selectedPlayers, now_batter, score, ball, strike, out_count)==1) {
+                break;
+            }
+            
         }
 
+        strike = 0;
+        ball = 0;
+
         // 各塁の状況を表示
-        cout << "一塁：" << one_base << endl;
-        cout << "二塁：" << two_base << endl;
-        cout << "三塁：" << thr_base << endl;
-        cout << endl;
+        std::cout << "一塁：" << one_base << std::endl;
+        std::cout << "二塁：" << two_base << std::endl;
+        std::cout << "三塁：" << thr_base << std::endl;
+        std::cout << std::endl;
     }
-    cout << "チェンジ！" << endl;
+    std::cout << "チェンジ！" << std::endl;
     updateRoster(players, selectedPlayers);
 }
