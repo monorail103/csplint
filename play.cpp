@@ -145,6 +145,26 @@ string getAtBatResultString(int result) {
     }
 }
 
+bool isCSVEmpty(const std::string& filename) {
+    std::ifstream file(filename);
+    
+    // ファイルが開けなかった場合はfalseを返す
+    if (!file.is_open()) {
+        std::cerr << "ファイルを開けませんでした: " << filename << std::endl;
+        return false;
+    }
+    
+    // ファイルの最初の文字をチェックする
+    char ch;
+    if (file.get(ch)) {
+        // ファイルに何か内容があれば、空ではない
+        return false;
+    } else {
+        // ファイルが空の場合
+        return true;
+    }
+}
+
 // 長打の種類を決定する関数
 int determineExtraBaseHit(const PlayerStats& player, std::mt19937& gen) {
     std::uniform_int_distribution<> extraBaseHitType(2, 4);
@@ -289,20 +309,47 @@ std::vector<PlayerStats> selectPlayersManually(std::vector<PlayerStats>& players
     std::vector<PlayerStats> selectedPlayers;
     int playerNum = 0;
     int count = 0;
+    std::string order = "";
 
-    while (count < 9) {
-        std::cout << "選手の背番号を入力してください: ";
-        std::cin >> playerNum;
+    std::string answer = "n";
+    std::cout << "前回のメンバーを選択しますか？（y/n）" << std::endl;
+    std::cin >> answer;
 
-        // 選手を検索してリストに追加
-        for (const auto& player : players) {
-            if (player.getNum() == playerNum) {
-                selectedPlayers.push_back(player);
-                count++;
-                break;
+    if(answer=="y" && !isCSVEmpty("startorder.csv")) {
+
+        std::ifstream file("startorder.csv"); // CSVファイルを開く
+        std::string line;
+        while (std::getline(file, line, ',')) {
+            int playerNum = std::stoi(line);
+            // ここで取得したデータを使って何か処理を行う
+            for (const auto& player : players) {
+                if (player.getNum() == playerNum) {
+                    selectedPlayers.push_back(player);
+                    count++;
+                    break;
+                }
             }
         }
+    }
+    else{
+        std::ofstream file("startorder.csv"); // CSVファイルを開く
+        while (count < 9) {
+            std::cout << "選手の背番号を入力してください: ";
+            std::cin >> playerNum;
 
+            // 選手を検索してリストに追加
+            for (const auto& player : players) {
+                if (player.getNum() == playerNum) {
+                    if(count!=8) file << playerNum << ", ";
+                    else file << playerNum;
+                    selectedPlayers.push_back(player);
+                    count++;
+                    break;
+                }
+            }
+
+        }
+        file << std::endl;
     }
 
     return selectedPlayers;
